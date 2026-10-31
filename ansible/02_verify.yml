@@ -1,0 +1,58 @@
+---
+# Stage 2 (enable_peering = true). Proves forward path, reverse path,
+# SSH to App-B through the bastion (Ansible itself reaches App-B that way),
+# and that neither private host has a public IPv4.
+- name: Verify peering from both private hosts
+  hosts: app_a:app_b
+  gather_facts: false
+  tasks:
+    - name: Ensure evidence folder exists
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/evidence"
+        state: directory
+        mode: "0755"
+      delegate_to: localhost
+      run_once: true
+
+    - name: Identify the host (a shell here proves SSH worked via the bastion)
+      ansible.builtin.shell: "hostname; hostname -I"
+      register: ident
+      changed_when: false
+
+    - name: Ping the peer's private IP (retry once hosts are settled)
+      ansible.builtin.command: "ping -c 4 -W 2 {{ peer_ip }}"
+      register: ping
+      until: "'4 received' in ping.stdout"
+      retries: 3
+      delay: 5
+      failed_when: false
+      changed_when: false
+
+    - name: Ask instance metadata (IMDSv2) for a public IPv4. 404 = none assigned
+      ansible.builtin.shell: |
+        TOKEN=$(curl -s -m 3 -X PUT http://169.254.169.254/latest/api/token -H "X-aws-ec2-metadata-token-ttl-seconds: 60")
+        curl -s -m 3 -o /dev/null -w '%{http_code}' -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/public-ipv4
+      args:
+        executable: /bin/bash
+      register: public_ip_check
+      changed_when: false
+
+    - name: Assert tests passed
+      ansible.builtin.assert:
+        that:
+          - ping.rc == 0
+          - "'4 received' in ping.stdout"
+          - public_ip_check.stdout == '404'
+        success_msg: "{{ inventory_hostname }}: ping 4/4 to {{ peer_ip }}, no public IPv4."
+        fail_msg: "{{ inventory_hostname }}: check routes, pcx state, SG echo rule, ping output in evidence."
+
+    - name: Save evidence
+      ansible.builtin.copy:
+        dest: "{{ playbook_dir }}/evidence/02_verify_{{ inventory_hostname }}.txt"
+        content: |
+          host={{ inventory_hostname }}  ({{ ident.stdout_lines | join(' / ') }})
+          command: ping -c 4 {{ peer_ip }}
+          {{ ping.stdout }}
+          public IPv4 metadata HTTP status: {{ public_ip_check.stdout }}  (404 = no public IPv4)
+        mode: "0644"
+      delegate_to: localhost

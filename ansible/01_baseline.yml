@@ -1,0 +1,73 @@
+---
+# Stage 1 (enable_peering = false). Proves the "before" state.
+# Expected: bastion and App-A reachable; App-A cannot reach App-B.
+- name: Baseline - bastion and App-A are reachable (VPC A local route)
+  hosts: bastion:app_a
+  gather_facts: false
+  tasks:
+    - name: Identify the host
+      ansible.builtin.shell: "hostname; hostname -I"
+      register: ident
+      changed_when: false
+
+    - name: Show identity
+      ansible.builtin.debug:
+        var: ident.stdout_lines
+
+- name: Baseline - nothing can reach VPC B yet
+  hosts: bastion:app_a
+  gather_facts: false
+  tasks:
+    - name: Ensure evidence folder exists
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/evidence"
+        state: directory
+        mode: "0755"
+      delegate_to: localhost
+      run_once: true
+
+    - name: Ping App-B (4 packets, 2s timeout each)
+      ansible.builtin.command: ping -c 4 -W 2 10.20.1.10
+      register: ping
+      failed_when: false
+      changed_when: false
+      when: inventory_hostname == 'ewb-app-a'
+
+    - name: Bastion TCP/22 probe to App-B (should time out)
+      ansible.builtin.shell: "timeout 5 bash -c 'exec 3<>/dev/tcp/10.20.1.10/22'"
+      register: ssh_probe
+      failed_when: false
+      changed_when: false
+      when: inventory_hostname == 'ewb-bastion'
+
+    - name: Assert the baseline failed as expected
+      ansible.builtin.assert:
+        that:
+          - (ping.rc | default(1)) != 0
+          - (ssh_probe.rc | default(1)) != 0
+        success_msg: "Baseline OK: no path to 10.20.1.10 before peering."
+
+    - name: Save App-A baseline evidence
+      ansible.builtin.copy:
+        dest: "{{ playbook_dir }}/evidence/01_baseline_app-a_ping.txt"
+        content: |
+          TEST 01 / Baseline  host=App-A (10.10.2.10)  before peering
+          command: ping -c 4 10.20.1.10
+          exit code: {{ ping.rc }}
+          {{ ping.stdout }}
+          RESULT: no replies (expected)
+        mode: "0644"
+      delegate_to: localhost
+      when: inventory_hostname == 'ewb-app-a'
+
+    - name: Save bastion probe evidence
+      ansible.builtin.copy:
+        dest: "{{ playbook_dir }}/evidence/01_baseline_bastion_ssh_probe.txt"
+        content: |
+          TEST 01b / Baseline  host=Bastion (10.10.1.10)  before peering
+          command: timeout 5 bash -c 'exec 3<>/dev/tcp/10.20.1.10/22'
+          exit code: {{ ssh_probe.rc }}  (non-zero = could not connect)
+          RESULT: App-B SSH unreachable before peering (expected)
+        mode: "0644"
+      delegate_to: localhost
+      when: inventory_hostname == 'ewb-bastion'

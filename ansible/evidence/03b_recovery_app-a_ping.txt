@@ -1,0 +1,14 @@
+TEST 06b / Recovery  host=App-A  ICMP echo rule RESTORED on ewb-sg-app-b
+command: ping -c 4 10.20.1.10
+PING 10.20.1.10 (10.20.1.10) 56(84) bytes of data.
+64 bytes from 10.20.1.10: icmp_seq=1 ttl=255 time=0.792 ms
+64 bytes from 10.20.1.10: icmp_seq=2 ttl=255 time=0.603 ms
+64 bytes from 10.20.1.10: icmp_seq=3 ttl=255 time=0.611 ms
+64 bytes from 10.20.1.10: icmp_seq=4 ttl=255 time=0.597 ms
+
+--- 10.20.1.10 ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3061ms
+rtt min/avg/max/mdev = 0.597/0.650/0.792/0.082 ms
+
+RESULT: 4 replies, 0% loss (expected)
+

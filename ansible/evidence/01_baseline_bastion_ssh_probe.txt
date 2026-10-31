@@ -1,0 +1,5 @@
+TEST 01b / Baseline  host=Bastion (10.10.1.10)  before peering
+command: timeout 5 bash -c 'exec 3<>/dev/tcp/10.20.1.10/22'
+exit code: 124  (non-zero = could not connect)
+RESULT: App-B SSH unreachable before peering (expected)
+

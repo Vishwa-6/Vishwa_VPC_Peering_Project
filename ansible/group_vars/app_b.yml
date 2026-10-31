@@ -1,0 +1,2 @@
+---
+peer_ip: 10.10.2.10   # App-B pings App-A

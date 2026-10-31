@@ -1,0 +1,14 @@
+host=ewb-app-b  (ip-10-20-1-10.ap-south-1.compute.internal / 10.20.1.10)
+command: ping -c 4 10.10.2.10
+PING 10.10.2.10 (10.10.2.10) 56(84) bytes of data.
+64 bytes from 10.10.2.10: icmp_seq=1 ttl=255 time=0.814 ms
+64 bytes from 10.10.2.10: icmp_seq=2 ttl=255 time=0.621 ms
+64 bytes from 10.10.2.10: icmp_seq=3 ttl=255 time=0.598 ms
+64 bytes from 10.10.2.10: icmp_seq=4 ttl=255 time=0.615 ms
+
+--- 10.10.2.10 ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3058ms
+rtt min/avg/max/mdev = 0.598/0.662/0.814/0.088 ms
+
+public IPv4 metadata HTTP status: 404  (404 = no public IPv4)
+

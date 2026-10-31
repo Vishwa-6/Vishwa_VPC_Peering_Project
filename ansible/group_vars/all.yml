@@ -1,0 +1,6 @@
+---
+ansible_user: ec2-user
+ansible_python_interpreter: /usr/bin/python3
+# Use the Terraform-generated SSH config so ProxyJump through the bastion works.
+# accept-new trusts a host key on first sight only; a changed key is still rejected.
+ansible_ssh_common_args: "-F {{ inventory_dir }}/ssh_config -o StrictHostKeyChecking=accept-new"

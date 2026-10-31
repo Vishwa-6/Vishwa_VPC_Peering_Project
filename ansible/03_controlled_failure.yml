@@ -1,0 +1,84 @@
+---
+# Controlled failure: remove ONLY App-B's ICMP echo rule, show replies stop,
+# restore the exact rule, show replies resume. The SSH rule stays in place.
+# Needs enable_peering = true in terraform/terraform.tfvars (so this does not undo peering).
+- name: Remove the App-B ICMP rule
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: terraform apply with app_b_icmp_enabled=false
+      ansible.builtin.command:
+        argv: [terraform, "-chdir={{ playbook_dir }}/../terraform", apply, -auto-approve, -input=false, -var, app_b_icmp_enabled=false]
+      changed_when: true
+
+    - name: Let the security group change settle
+      ansible.builtin.pause:
+        seconds: 10
+
+- name: Forward ping must now FAIL
+  hosts: app_a
+  gather_facts: false
+  tasks:
+    - name: Ping App-B
+      ansible.builtin.command: ping -c 4 -W 2 10.20.1.10
+      register: ping_fail
+      failed_when: false
+      changed_when: false
+
+    - ansible.builtin.assert:
+        that: ping_fail.rc != 0
+        success_msg: "Replies stopped after removing the App-B echo rule."
+
+    - name: Save evidence
+      ansible.builtin.copy:
+        dest: "{{ playbook_dir }}/evidence/03a_failure_app-a_ping.txt"
+        content: |
+          TEST 06a / Controlled failure  host=App-A  ICMP echo rule REMOVED on ewb-sg-app-b
+          command: ping -c 4 10.20.1.10
+          {{ ping_fail.stdout }}
+          RESULT: no replies (expected)
+        mode: "0644"
+      delegate_to: localhost
+
+- name: Restore the exact rule
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: terraform apply with app_b_icmp_enabled=true
+      ansible.builtin.command:
+        argv: [terraform, "-chdir={{ playbook_dir }}/../terraform", apply, -auto-approve, -input=false, -var, app_b_icmp_enabled=true]
+      changed_when: true
+
+    - name: Let the security group change settle
+      ansible.builtin.pause:
+        seconds: 10
+
+- name: Forward ping must RECOVER
+  hosts: app_a
+  gather_facts: false
+  tasks:
+    - name: Ping App-B
+      ansible.builtin.command: ping -c 4 -W 2 10.20.1.10
+      register: ping_ok
+      until: "'4 received' in ping_ok.stdout"
+      retries: 3
+      delay: 5
+      failed_when: false
+      changed_when: false
+
+    - ansible.builtin.assert:
+        that: "'4 received' in ping_ok.stdout"
+        success_msg: "Replies resumed after restoring the rule."
+
+    - name: Save evidence
+      ansible.builtin.copy:
+        dest: "{{ playbook_dir }}/evidence/03b_recovery_app-a_ping.txt"
+        content: |
+          TEST 06b / Recovery  host=App-A  ICMP echo rule RESTORED on ewb-sg-app-b
+          command: ping -c 4 10.20.1.10
+          {{ ping_ok.stdout }}
+          RESULT: 4 replies, 0% loss (expected)
+        mode: "0644"
+      delegate_to: localhost
